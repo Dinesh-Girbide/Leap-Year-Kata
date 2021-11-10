@@ -2,6 +2,10 @@ plugins {
 	id 'org.springframework.boot' version '2.5.6'
 	id 'io.spring.dependency-management' version '1.0.11.RELEASE'
 	id 'java'
+<<<<<<< HEAD
+=======
+	id 'war'
+>>>>>>> origin/update
 }
 
 group = 'co.incubyte'
@@ -13,8 +17,14 @@ repositories {
 }
 
 dependencies {
+<<<<<<< HEAD
 	implementation 'org.springframework.boot:spring-boot-starter-web:2.5.6'
 	testImplementation 'org.springframework.boot:spring-boot-starter-test:2.5.6'
+=======
+	implementation 'org.springframework.boot:spring-boot-starter-web'
+	providedRuntime 'org.springframework.boot:spring-boot-starter-tomcat'
+	testImplementation 'org.springframework.boot:spring-boot-starter-test'
+>>>>>>> origin/update
 }
 
 test {
