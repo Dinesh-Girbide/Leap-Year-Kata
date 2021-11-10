@@ -14,6 +14,9 @@ class LeapYearTest {
 
   @Test
   void year_divisible_by_four_and_onehundred_and_not_by_fourhundred_should_return_false() {
+    assertTrue(LeapYear.checkLeapYear(1996));
+    assertFalse(LeapYear.checkLeapYear(1997));
     assertFalse(LeapYear.checkLeapYear(1800));
+    assertTrue(LeapYear.checkLeapYear(1600));
   }
 }
