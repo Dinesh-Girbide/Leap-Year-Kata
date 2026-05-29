@@ -101,8 +101,9 @@ Call `get_relevant_standards(raw_remote_url, task_slots, top_k=30)` on fabric MC
 
 Partition `relevant_rules` by pack (`hipaa`, `owasp`, `wcag`, `clean-code`, `pci`, others):
 
-- Each pack with ≥1 rule will spawn one reviewer in 5d.
-- Always-on reviewers (spawn regardless of pack hits): `architecture` (verifies style adherence), `test-quality` (verifies suite shape), and `integration` (verifies nothing the slice introduced is dangling — no dead code, no unwired components, configs, handlers, routes, etc.).
+- Each pack with ≥1 rule will spawn one compliance reviewer in 5d (the `anthara:reviewer` agent, `focus=<pack>`).
+- Always-on reviewers (spawn regardless of pack hits), each its own agent: `architecture` (style adherence), `integration` (nothing the slice introduced is dangling), `test-quality` (suite shape), `ai-ergonomics` (navigability/clarity erosion), `code-quality` (naming, SRP, function design, categorical framing).
+- Conditional reviewer: `accessibility` (the `anthara:reviewer-a11y` agent) spawns only when the slice touches a user surface (`user_facing: true`).
 
 Surface a one-line status — _"Starting slice 5.X (<name>). N relevant rules across packs <list>. Reviewers will spawn for: <list>."_ — then proceed.
 
@@ -140,14 +141,19 @@ If developer detected regression (a previously ticked AC's test now fails):
 
 ### 5d. Spawn reviewer fleet (parallel)
 
-Determine reviewer set:
+Determine reviewer set. Each focus maps to a dedicated agent so it loads only the skill it needs:
 
-- One reviewer per pack with ≥1 rule in `relevant_rules`. Spawn parameters: `focus=<pack-name>`, `scope=slice:N`.
-- Always-on: `focus=architecture, scope=slice:N`.
-- Always-on: `focus=test-quality, scope=slice:N`.
-- Always-on: `focus=integration, scope=slice:N`.
+| Focus | `subagent_type` | Spawn condition |
+|---|---|---|
+| `<pack>` (one per pack with ≥1 rule) | `anthara:reviewer` | per active pack |
+| `architecture` | `anthara:reviewer-architecture` | always-on |
+| `integration` | `anthara:reviewer-integration` | always-on |
+| `test-quality` | `anthara:reviewer-test-quality` | always-on |
+| `ai-ergonomics` | `anthara:reviewer-ai-ergonomics` | always-on |
+| `code-quality` | `anthara:reviewer-code-quality` | always-on |
+| `accessibility` | `anthara:reviewer-a11y` | when slice is `user_facing` |
 
-Spawn ALL reviewers in a single Agent-tool batch (parallel execution, `subagent_type: anthara:reviewer`). Each receives: their `focus`, their `scope`, the slice diff (`git diff` against the start-of-slice marker), the relevant pack rules for their focus, paths to spec / ARCHITECTURE.md / context.
+Spawn ALL reviewers in a single Agent-tool batch (parallel execution), each with `scope=slice:N`. Each receives: their `focus`, their `scope`, the slice diff (`git diff` against the start-of-slice marker), the relevant pack rules for their focus (compliance reviewers only), paths to spec / ARCHITECTURE.md / context (plus `design.md` for the accessibility reviewer).
 
 Wait for all. Aggregate findings:
 
@@ -174,11 +180,15 @@ Surface a one-line slice-handoff summary (_"Slice 5.X done — N ACs ticked, M t
 
 After the last slice:
 
-Spawn reviewer fleet for the end-of-spec scope:
+Spawn the reviewer fleet for the end-of-spec scope, same focus→`subagent_type` mapping as 5d, all with `scope=all`:
 
-- Each pack reviewer with `scope=all` (cross-slice patterns, cumulative impact).
-- Always-on `architecture` reviewer with `scope=all` (cohesion / coupling deltas across the whole spec).
-- Always-on `test-quality` reviewer with `scope=all` (full suite shape: pyramid distribution, total coverage delta, mutation score if available).
+- Each pack's compliance reviewer (`anthara:reviewer`, `focus=<pack>`) — cross-slice patterns, cumulative compliance impact.
+- `anthara:reviewer-architecture` — cohesion / coupling deltas across the whole spec.
+- `anthara:reviewer-integration` — anything left dangling across slices.
+- `anthara:reviewer-test-quality` — full suite shape: pyramid distribution, total coverage delta, mutation score if available.
+- `anthara:reviewer-ai-ergonomics` — cumulative navigability/clarity erosion.
+- `anthara:reviewer-code-quality` — cross-slice duplication and cohesion erosion.
+- `anthara:reviewer-a11y` (only if the spec had any `user_facing` slice).
 
 Wait. Aggregate. End-of-spec findings are advisory by default — they do NOT block develop's exit; the user decides.
 

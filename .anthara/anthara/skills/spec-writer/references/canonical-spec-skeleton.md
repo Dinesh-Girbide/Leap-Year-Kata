@@ -78,6 +78,15 @@ Outside-in, independently testable, sequenced for build.
 - [ ] **5.1.2** <Compliance AC tied to an active pack rule.>
 - [ ] **5.1.3** <Error-path AC.>
 
+**Verification (slice complete when these pass):**
+
+1. **Tests.** Run the full test suite — all tests green. Tests broken by this slice's changes get fixed inside this slice, not deferred. Keeping the test runner in watch mode during slice work surfaces drift early.
+2. **Migrations.** Apply all migrations against the project's database; they apply without error. Database state is not assumed reset.
+3. **User-facing flow.** Drive the slice's primary user-observable behavior end-to-end through the `chrome-devtools-mcp` browser session — confirm what this slice's outside-in description and ACs promise actually happens in the running app.
+4. **Accessibility.** In the same `chrome-devtools-mcp` session: tab-order traversal, focus-visibility on every interactive control, aria-labels present per the project's design system.
+
+(Conditional inclusion: omit step 2 when the slice doesn't change schema; omit steps 3 and 4 when the slice has no UI surface — e.g. pure backend or MCP-only. Step 1 always present.)
+
 ### 5.2 <Next slice>
 <...>
 

@@ -79,12 +79,12 @@ If fabric is unreachable, note it in Open Questions and proceed in corpus-only m
 
 Scan top-level docs (`README.md`, `CLAUDE.md`, `AGENTS.md`), stack and module layout, constraints visible in code (auth, data model, regulated annotations, feature flags). Cite specific modules when proposing slices; check existing code when proposing invariants.
 
-**Detect design state** (same classification as discovery): greenfield (no UI deps), brownfield (UI present, no formal system), brownfield-with-system (`design.md` or theme files exist). This routes Step 4's design context handling.
+**Detect design state** (same classification as discovery's Step 2, same stack-agnostic signals — look for the *role* each file plays, not the specific framework): greenfield (no UI source files, no design docs), brownfield (UI source files present, no formal design doc or authoritative token/theme file), brownfield-with-system (`design.md` exists or an authoritative token/variable file is present). This routes Step 4's design context handling. If a `Design state` field is present in the context note from `/anthara:start`, inherit it directly — do not re-detect.
 
-**Detect architecture state.** Scan dependencies (`package.json`, `requirements.txt`, `go.mod`, etc.), framework conventions (NestJS module structure, Next.js app router, FastAPI routers), and existing module layout. Look for an `ARCHITECTURE.md`, `docs/architecture.md`, or similar.
+**Detect architecture state.** Scan the project's build/dependency manifests (whatever format the stack uses), framework conventions observable from directory layout and import patterns, and existing module structure. Look for `ARCHITECTURE.md`, `docs/architecture.md`, or similar.
 
 - *Greenfield* — no tech stack chosen yet; no architectural pattern observable. Step 4 will probe.
-- *Brownfield* — tech stack visible from deps; architectural pattern detectable from layout (e.g., `apps/api/src/modules/<domain>/{controller,service,repository}.ts` ⇒ modular monolith with layered intra-module). No formal `ARCHITECTURE.md`.
+- *Brownfield* — tech stack visible from the project layout; architectural pattern detectable from directory structure and module conventions (e.g., feature-per-directory, layers-per-directory, domain grouping). No formal `ARCHITECTURE.md`.
 - *Brownfield with architecture* — `ARCHITECTURE.md` exists and names the style; cite it as a numbered source and inherit verbatim.
 - *Ambiguous* — tech stack visible but pattern unclear. Ask the user once.
 
@@ -107,9 +107,9 @@ Spec-writer extracts structure; it does not redo discovery.
 
 Bring expert knowledge in. Verify externals with `WebSearch` / `WebFetch` — each fetched URL becomes a numbered source.
 
-**Pull Design context.** If the discovery brief contains a `Design context` theme under §5 Findings, read it; the spec inherits direction (greenfield) or extracted conventions (brownfield). UI slices reference design tokens / patterns from this context in their mockups and ACs.
+**Pull Design context.** Check in this priority order: (1) `Design direction` field in the `/anthara:start` context note — if populated, inherit it and skip any probe; (2) `Design context` theme under §5 Findings of the discovery brief — read it; the spec inherits direction. UI slices reference design tokens / patterns from this context in their mockups and ACs.
 
-If the brief lacks a `Design context` theme (older brief), or if the spec was started from scratch and the project touches a UI, run an inline design probe before writing UI slices. Use the same dual-mode logic as discovery's design probe:
+If neither source has design direction (older brief, no context note, or both set to "none — probe skipped"), and the project touches a UI, run an inline design probe before writing UI slices. Use the same dual-mode logic as discovery's design probe:
 
 - *Greenfield* — short interview about references, density, tone, mode, motion, accessibility, worst-case environment. ~5-7 turns; per-turn budget; expert-designer voice.
 - *Brownfield* — scan the codebase for framework, component library, theme files, color palette, dominant patterns. Summarize, confirm direction with the user, capture anti-patterns and don'ts.
@@ -136,11 +136,11 @@ The answers feed slice mockups (ASCII screen layouts) and AC specifics. Inheriti
 
 *Greenfield* — ask about tech choices first, then propose the architecture aligned with those choices and the spec's requirements:
 
-1. `AskUserQuestion` for the major tech dimensions, one tool call carrying multiple questions:
-   - Backend runtime: *Node (NestJS / Hono / Fastify) / Python (FastAPI / Django) / Go / other*.
-   - Database: *Postgres (Supabase / RDS / managed) / MySQL / MongoDB / DynamoDB*.
-   - Hosting / deploy target: *Supabase / Vercel / AWS / GCP / Cloudflare Workers / self-host*.
-   - Auth: *Supabase Auth / Auth0 / Clerk / custom*.
+1. `AskUserQuestion` for the major tech dimensions, one tool call carrying multiple questions. **Derive the candidate options from what you observed in Step 3 and the domain the spec describes** — do not hard-code a fixed universal list. Offer the 3-4 most likely choices for this project's context, plus "other." For example: if the project is a Python data pipeline, surface Python runtime options first; if it's a mobile app, surface mobile runtimes; if it's a web API with no stack signals, surface a broad set. Dimensions to cover:
+   - Backend runtime / framework (derive from context).
+   - Database / persistence (derive from context).
+   - Hosting / deploy target (derive from context).
+   - Auth mechanism (derive from context).
 2. From the answers + the spec's requirements (scale, slice independence, regulated content, real-time / async needs), recommend an architectural style by name. Justify in 2-3 sentences. Examples:
    - Supabase + edge functions + Postgres ⇒ *serverless / FaaS with RLS-as-authorization*.
    - NestJS + Postgres + monolith hosting ⇒ *modular monolith with layered intra-module structure*.
@@ -151,7 +151,7 @@ The answers feed slice mockups (ASCII screen layouts) and AC specifics. Inheriti
 
 *Brownfield (without architecture doc)* — extract the de-facto style from the codebase:
 
-1. Summarize the observable structure: framework, dominant module shape, dependency direction. *"I see NestJS with feature modules at `apps/api/src/<domain>/` each having `controller / service / repository`. No cross-module imports except through DTOs. This reads as **modular monolith with layered intra-module structure**. Match?"* — `AskUserQuestion`.
+1. Summarize the observable structure in stack-neutral terms: how features are grouped (by domain, by layer, by type), what the module boundary looks like, what the dependency direction is. Then propose the closest named architectural style and confirm. *"Match?"* — `AskUserQuestion`.
 2. Confirm or correct. Capture banned anti-patterns the user calls out (e.g., *"no shared mutable singletons", "no controllers calling other controllers"*).
 3. Inherit the de-facto style for new slices; deviation requires explicit justification in the slice.
 
@@ -184,7 +184,9 @@ Slices touch types and preserve invariants.
 
 Each slice is a vertical, externally-observable unit, sequenced for build (skeleton or happy path first, then alternates, errors, edges). Compliance ACs ride alongside functional ones.
 
-Each slice carries: a verb-led name, a one-paragraph outside-in description, five metadata fields (Touches types / Preserves invariants / Affected modules / Active packs / **Reachability**), ACs as a markdown checklist (`- [ ] **5.1.1** <text>`) so they can be ticked off as `/anthara:develop` lands them, and an inline diagram where helpful (ASCII for UI, mermaid for sequences and state changes). See `references/canonical-spec-skeleton.md` for the exact shape.
+Each slice carries: a verb-led name, a one-paragraph outside-in description, five metadata fields (Touches types / Preserves invariants / Affected modules / Active packs / **Reachability**), ACs as a markdown checklist (`- [ ] **5.1.1** <text>`) so they can be ticked off as `/anthara:develop` lands them, a **Verification block** describing how to confirm the slice works end-to-end (see below), and an inline diagram where helpful (ASCII for UI, mermaid for sequences and state changes). See `references/canonical-spec-skeleton.md` for the exact shape.
+
+**Verification block per slice.** After the AC checklist, emit a 3-4 step Verification block written in stack-agnostic shape language — never specific commands, file names, or routes. Always include a "Run the full test suite" step. Include the migrations step when the slice changes schema. Include the user-facing-flow and accessibility steps (both driven through the `chrome-devtools-mcp` browser session) when the slice has any UI surface; omit both for pure backend or MCP-only slices. The exact wording lives in `references/canonical-spec-skeleton.md`'s slice template — use it verbatim. The point is to capture what "slice complete" means operationally, not to predict file names that don't exist yet.
 
 **Reachability — the wiring contract.** Each slice declares one or more Reachability lines of the form `<Host> → <Entry>`. The Entry is the outermost user-reachable thing the slice exposes (a screen, button, CLI subcommand, HTTP endpoint, webhook subscriber, scheduled job). The Host is the surface that contains the Entry — name an earlier slice's Entry verbatim, or write `root` for the legitimate first surfaces (the app shell, the CLI entry point, the public API root). When the same Entry is reachable from multiple Hosts, write one line per Host. These lines turn slice ordering into a mechanical dependency graph rather than a narrative — the next instruction in this step uses them.
 

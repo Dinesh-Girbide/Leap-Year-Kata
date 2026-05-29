@@ -114,11 +114,11 @@ This grounds findings in what already exists. When the user later describes a de
 
 Also at this step, **detect available MCPs** — Atlassian, Notion, Google Workspace, Slack, Jira, Linear, Salesforce, Microsoft 365, Figma, etc. Whichever the user has connected. You will need them in Step 1's point-to-doc path for reading remote docs, in Step 4 for ingesting structured org context, and in Step 6 for choosing a write destination. Do not require any specific MCP — the skill works with whatever is available, and falls back to `WebFetch` for public URLs.
 
-**Detect design state** for the project. This routes the design probe in Step 3:
+**Detect design state** for the project. This routes the design probe in Step 3. Detection is stack-agnostic — look for the *role* each file plays (UI source, design authority, token definition), not the specific framework or filename:
 
-- *Greenfield* — no UI framework dependencies, no design system files, no UI code in the repo. Or no repo at all.
-- *Brownfield* — UI framework present (React / Vue / Svelte / etc.), component library detectable (shadcn/ui, MUI, Bootstrap, Tailwind config), CSS / theme files exist, but no formal design doc.
-- *Brownfield with system* — `design.md` exists at repo root or `/docs`, or a theme/tokens file is present and authoritative (e.g., `tokens.json`, `theme.ts`).
+- *Greenfield* — no UI source files, no component library config, no visual design docs in the repo. Or no repo at all.
+- *Brownfield* — UI source files present (components, views, screens, templates, or similar); component library or styling system detectable from config or import patterns; but no formal design doc and no authoritative token/theme file.
+- *Brownfield with system* — `design.md` exists at repo root or `/docs`; OR an authoritative token/theme/variable file is present and named as the source of truth (any stack: CSS custom-properties file, token JSON, theme module, variables file, etc.).
 - *Ambiguous* — mixed signals. Ask the user once via `AskUserQuestion`.
 
 ## Step 3: Run elicitation
@@ -185,7 +185,7 @@ Choose questions to fill the gaps the corpus has not yet filled. If a finding is
 - *Adding a contributor:* `yes, add them / note them, do not reach out / skip for now`.
 - *Are we done:* `done — share the location / one more input to add / show me the doc first / pause`.
 
-**Design probe — at the tail of elicitation.** Once the corpus has stabilized and findings have settled, run a focused design probe before moving to synthesis. The probe shape depends on the design state detected in Step 2.
+**Design probe — at the tail of elicitation.** Once the corpus has stabilized and findings have settled, run a focused design probe before moving to synthesis. Skip if the context note from `/anthara:start` already carries a populated `Design direction` field (meaning start ran the probe before routing here — inherit that answer and record it as a finding without re-asking). The probe shape depends on the design state detected in Step 2.
 
 *Greenfield (or no design system yet)* — the user is building from a blank canvas; act like a senior product designer interviewing the founder. Bring expertise, name references. Per-turn budget applies — open questions one at a time, `AskUserQuestion` for closed:
 
@@ -200,8 +200,8 @@ Choose questions to fill the gaps the corpus has not yet filled. If a finding is
 
 *Brownfield (UI exists, no formal system)* — extract conventions from what's already there; do not invent. Summarize the extracted state first, then confirm direction:
 
-1. Scan: framework, component library, Tailwind config / CSS variables, color palette in stylesheets, type pairing, dominant component patterns, screenshots in `docs/`.
-2. Summarize what was found in 4-6 bullets. *"I see Tailwind + shadcn/ui + a 9-step neutral palette + Geist Sans for headings, JetBrains Mono for code. Dominant patterns: card-with-actions, two-column dashboard, modal-confirm-destructive."*
+1. Scan: UI source files for dominant layout patterns, styling approach (utility classes / CSS-in-JS / stylesheets / native styles / etc.), color palette, type scale, dominant component patterns, screenshots or mockups in `docs/`.
+2. Summarize what was found in 4-6 bullets in neutral, stack-agnostic terms. For example, one possible summary might read: *"I see Tailwind + shadcn/ui + a 9-step neutral palette + Geist Sans for headings, JetBrains Mono for code. Dominant patterns: card-with-actions, two-column dashboard, modal-confirm-destructive."* Your summary should use whatever terms fit the actual codebase — this example is one of many possible shapes.
 3. `AskUserQuestion` — Direction: *keep verbatim and formalize / evolve some areas (which) / stop drift, do not evolve*.
 4. *"Anti-patterns you want banned (e.g., inline styles, custom shadows, ad-hoc colors)?"* (open)
 5. *"Anything in the existing UI that does NOT represent the direction — places where new screens should NOT match what is there?"* (open) — catches the *"we ship like X, not like Y, even though both exist"* case.

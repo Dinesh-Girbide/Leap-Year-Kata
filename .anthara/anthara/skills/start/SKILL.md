@@ -38,7 +38,16 @@ If running inside a repo (cap at ~5 reads — start is triage, not exploration):
 - Compute `raw_remote_url = git remote get-url origin`.
 - Parse `<owner/repo>` from `raw_remote_url` (e.g., `github.com/anthara-ai/plugin` → `anthara-ai/plugin`). Never `ORG_WIDE`.
 - List `docs/specs/` for existing specs (informational — useful when recommending).
-- Read `README.md`, `CLAUDE.md`, and one top-level package/config file (`package.json` / `Cargo.toml` / `pyproject.toml` / `go.mod`) if present. Note primary stack, frameworks, and major modules in 2-4 bullets. These bullets feed the **Codebase observations** field of the structured context note in Step 6 — so future skills don't redo this scan.
+- Read `README.md`, `CLAUDE.md`, and one top-level build or dependency manifest if present (the project's primary manifest file — whatever format the stack uses). Note primary stack, frameworks, and major modules in 2-4 bullets. These bullets feed the **Codebase observations** field of the structured context note in Step 6 — so future skills don't redo this scan.
+
+**Detect design state.** Classify as one of four states using stack-agnostic signals — look for the *role* each file plays, not the specific framework or filename:
+
+- **Greenfield** — no repo at all, OR repo exists but contains no UI source files, no component library config, no design system files, no visual design docs.
+- **Brownfield-no-system** — UI source files are present (any of: `components/`, `views/`, `screens/`, `pages/`, `templates/`, `assets/styles/`, `public/css/`, or similar), but no formal design doc and no authoritative token/theme file.
+- **Brownfield-with-system** — `design.md` exists (at repo root or `/docs`), OR an authoritative theme/token/variable file is present and acts as the visual source of truth (any stack: CSS custom-properties file, `tokens.json`, `theme.*`, `styles/variables.*`, etc.).
+- **Ambiguous** — mixed signals (UI code present, partial docs). Default to brownfield-no-system; surface the ambiguity in the context note.
+
+**Detect UI-touching** from the description. Mark `yes` if the description contains words such as: screen, page, view, component, button, form, modal, dialog, dashboard, layout, navigation, UI, UX, frontend, app, interface, visual, design, style. Mark `no` if the description is exclusively about: API, backend, migration, job, worker, queue, CLI, script, infrastructure, data pipeline, or similar. When ambiguous, default to `yes`.
 
 Call `get_standards(<owner/repo>)` on fabric MCP. Inspect active packs.
 
@@ -69,7 +78,46 @@ If the description has explicit risk signals (*"payment"*, *"login"*, *"migrate"
 
 Risk threads forward as a hint to the invoked skill in Step 6.
 
-## Step 3: Heuristic classification
+## Step 3: Design probe gate
+
+For **Small feature** and **Larger feature** buckets (detected in Step 1), run the design probe below before routing. Skip for all other buckets (debug, bug-fix, brainstorm, exploratory, pointer — those routes handle design themselves or don't need it).
+
+The gate decision depends on the design state and UI-touching flag derived in Step 2:
+
+| Design state | UI-touching | First spec? | Action |
+|---|---|---|---|
+| Greenfield | any | any | Run **full design probe** |
+| Brownfield-no-system | yes | any | Run **extract-and-confirm probe** |
+| Brownfield-no-system | no | — | Skip |
+| Brownfield-with-system | yes | yes | Run **alignment check** (one `AskUserQuestion`) |
+| Brownfield-with-system | yes | no | Skip — design system answers it |
+| Brownfield-with-system | no | — | Skip |
+
+"First spec" = `docs/specs/` is empty or does not exist (already checked in Step 2).
+
+**Full design probe (greenfield).** Respect per-turn budget — one open question per turn, `AskUserQuestion` for all closed:
+
+1. Open: *"Name two or three products whose look and feel you admire. What should this product learn from each?"*
+2. `AskUserQuestion` — Density: *dense and information-rich / balanced / spacious and minimal*.
+3. `AskUserQuestion` — Tone: *precise and clinical / professional and warm / playful and consumer / utilitarian*.
+4. `AskUserQuestion` — Color mode: *light / dark / both / follow system*.
+5. `AskUserQuestion` — Motion: *none / subtle / expressive*.
+6. Open: *"In one word, what should a user feel the first time they use this?"*
+7. `AskUserQuestion` — Accessibility floor: *WCAG AA / WCAG AAA / legally mandated minimum*.
+
+**Extract-and-confirm probe (brownfield-no-system).** Read existing UI source files first, then:
+
+1. Summarize the visual conventions you observed: dominant layout patterns, styling approach, color palette, type scale. Keep to 3-5 bullets. Describe in neutral terms — do not name specific libraries unless the user already has.
+2. `AskUserQuestion` — Direction: *keep these conventions and formalize them / evolve in some areas (ask which) / stop drift, do not evolve*.
+3. Open: *"What visual anti-patterns do you want explicitly banned going forward?"*
+
+**Alignment check (brownfield-with-system, first spec).** One `AskUserQuestion`: *"I found a design system doc at [path]. Should new features follow it as-is, or has the direction evolved since it was written?"* Options: *follow as-is / it has evolved — let me explain / I'll update design.md first*.
+
+Capture probe answers in the context block under `Design direction` (see Step 6). If the probe was skipped, set `Design direction: none — probe skipped`.
+
+The design probe questions count toward the 2-question elicitation cap only if elicitation is also needed for routing disambiguation (Step 4). When the bucket is already clear and only the probe runs, the cap does not apply to the probe itself.
+
+## Step 4: Heuristic classification
 
 Map description signals + regulated context to a bucket:
 
@@ -85,11 +133,11 @@ Map description signals + regulated context to a bucket:
 | Existing artifact (discovery doc) | user pointed at a discovery brief | either | `/anthara:spec-writer` against that doc |
 | Existing artifact (spec) | user pointed at a spec | either | `/anthara:develop` against that spec |
 
-If the heuristic is unambiguous, advance to Step 5. Otherwise Step 4.
+If the heuristic is unambiguous, advance to Step 6. Otherwise Step 5.
 
-## Step 4: Targeted elicitation (only if heuristic is unsure)
+## Step 5: Targeted elicitation (only if heuristic is unsure)
 
-**Hard cap: 2 closed questions max.** If the heuristic from Step 3 is already unambiguous, skip Step 4 entirely. After 2 closed `AskUserQuestion` calls, if the route is still unclear, that's a discovery signal — proceed to Step 5 with bucket `exploratory` and silently invoke `/anthara:discovery` with the structured context note. Do not open a third question.
+**Hard cap: 2 closed questions max.** If the heuristic from Step 4 is already unambiguous, skip Step 5 entirely. After 2 closed `AskUserQuestion` calls, if the route is still unclear, that's a discovery signal — proceed to Step 6 with bucket `exploratory` and silently invoke `/anthara:discovery` with the structured context note. Do not open a third question.
 
 **Per-message check.** Before sending any message in this step, classify every question: closed → `AskUserQuestion`; open → text. Plain-text numbered question lists are a defect (the model's default tendency under user pressure — resist it).
 
@@ -102,9 +150,9 @@ Pick from these closed-question options for the disambiguating `AskUserQuestion`
 
 Skip questions the heuristic already answered. The goal is one or two questions, never a wall.
 
-## Step 5: Choose and invoke the route
+## Step 6: Choose and invoke the route
 
-Map the bucket from Step 3 (or `exploratory` if Step 4 hit the elicitation cap) to a route. Invoke the route's entry skill via `Skill` directly with the structured context note from Step 6 — no intermediate confirmation. The single exception is the "skip Anthara, fix manually" path: surface that one recommendation via `AskUserQuestion` (options: *Skip and fix manually / Create a tracker entry first / Route through Anthara anyway*) because it exits the chain.
+Map the bucket from Step 4 (or `exploratory` if Step 5 hit the elicitation cap) to a route. Invoke the route's entry skill via `Skill` directly with the structured context note from Step 7 — no intermediate confirmation. The single exception is the "skip Anthara, fix manually" path: surface that one recommendation via `AskUserQuestion` (options: *Skip and fix manually / Create a tracker entry first / Route through Anthara anyway*) because it exits the chain.
 
 | Bucket | Route |
 |---|---|
@@ -117,11 +165,11 @@ Map the bucket from Step 3 (or `exploratory` if Step 4 hit the elicitation cap) 
 | Exploratory | `/anthara:discovery` → `/anthara:spec-writer` → `/anthara:develop` |
 | Pointer to discovery doc | `/anthara:spec-writer` |
 | Pointer to spec | `/anthara:develop` |
-| Elicitation overflow (>2 questions needed in Step 4) | `/anthara:discovery` |
+| Elicitation overflow (>2 questions needed in Step 5) | `/anthara:discovery` |
 
 For multi-step routes, invoke only the **first** skill. The chain unfolds naturally — discovery's hand-off mentions spec-writer, spec-writer's mentions develop, etc.
 
-## Step 6: Invoke the chosen skill with the structured context note
+## Step 7: Invoke the chosen skill with the structured context note
 
 Invoke via the `Skill` tool. The argument is a **structured prose block** — loose prose, not JSON; downstream skills read what they need without parsing a schema. Required format:
 
@@ -131,11 +179,14 @@ Invoke via the `Skill` tool. The argument is a **structured prose block** — lo
 ---
 ROUTED FROM /anthara:start
 
-Bucket: <bucket name from Step 5 table>
+Bucket: <bucket name from Step 6 table>
 Risk: <LOW | MODERATE | HIGH>
 Regulated packs active: <comma-separated pack names, or "none">
 Codebase observations: <2-4 short bullets from Step 2's scan, if any; "none" if not in a repo>
 Pointer: <URL or path if user provided one, else "none">
+Design state: <greenfield | brownfield-no-system | brownfield-with-system | ambiguous | not-in-repo>
+UI-touching: <yes | no>
+Design direction: <summary of probe answers from Step 3, or "none — probe skipped">
 
 Provisional elicitation questions (use, refine, or skip):
 1. <Q1>
@@ -148,13 +199,14 @@ Rules:
 - The block is required for every silent invocation. No exceptions.
 - **Provisional elicitation questions** are the ones start *would* have asked if it kept asking — capture them here instead of asking the user. They land in discovery (or whichever skill is invoked) as a starting elicitation set, not a wall. Closed and open both fine — discovery's Tool discipline section routes closed ones through `AskUserQuestion`.
 - The risk hint scales spec-writer's grilling depth and develop's reviewer-retry budget — propagate it accurately.
+- **Design direction** carries the design probe answers forward so spec-writer and discovery do not re-ask questions start already asked. When the probe was skipped, set it to `none — probe skipped` and let the downstream skill decide whether to run its own probe.
 
-For "skip Anthara" routes (trivial fix in non-regulated context, user picked "fix manually" in Step 5's `AskUserQuestion`): tell the user explicitly, suggest the manual-fix shape (which file, which test to add), then exit. Do not invoke a skill, do not emit the context block.
+For "skip Anthara" routes (trivial fix in non-regulated context, user picked "fix manually" in Step 6's `AskUserQuestion`): tell the user explicitly, suggest the manual-fix shape (which file, which test to add), then exit. Do not invoke a skill, do not emit the context block.
 
 ## Rules
 
 - **Render closed questions via `AskUserQuestion`** — yes/no, choose-one, binary. Plain-text numbered lists are a defect.
-- **Cap elicitation at 2 closed questions.** Over the cap → invoke `/anthara:discovery` silently with the structured context block; do not ask a third.
+- **Cap elicitation (Step 5) at 2 closed questions.** Over the cap → invoke `/anthara:discovery` silently with the structured context block; do not ask a third. The design probe (Step 3) is separate and does not count toward this cap.
 - **Invoke within-Anthara routes silently** — brainstorm / discovery / spec-writer / develop / debug-fix / create-ticket all run directly via `Skill` with the structured context note. Only the "skip Anthara, fix manually" path needs `AskUserQuestion` confirmation because it exits the system.
 - **Detect regulated context every run** — the one fabric call start always makes; drives bug-fix routing.
 - **Routing is start's job; framing is the routed-to skill's job** — never scope, frame, or pre-elicit on behalf of the downstream skill. Capture provisional questions in the context block instead.

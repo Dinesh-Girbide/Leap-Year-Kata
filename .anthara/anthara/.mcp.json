@@ -2,7 +2,7 @@
   "mcpServers": {
     "fabric": {
       "type": "http",
-      "url": "${ANTHARA_FABRIC_URL}/fabric/mcp/${ANTHARA_MEMORY_GROUP}",
+      "url": "http://127.0.0.1:8100/mcp/anthara",
       "headers": {
         "Authorization": "Bearer ${ANTHARA_API_KEY}"
       }
@@ -10,6 +10,13 @@
     "codebase-memory-mcp": {
       "command": "codebase-memory-mcp",
       "args": []
+    },
+    "chrome-devtools": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "chrome-devtools-mcp@latest"
+      ]
     }
   }
 }
